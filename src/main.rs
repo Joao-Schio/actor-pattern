@@ -1,10 +1,10 @@
 use axum::{Router, routing::post};
 use tokio::sync::mpsc;
 
-use show::mensagem::mensageiro::Mensageiro;
-use show::mensagem::mensagem_manager::{MensagemManager, ManagerRequest};
-use show::mensagem::sistema_handle::SistemaHandle;
 use show::api::send::send_handler;
+use show::mensagem::mensageiro::Mensageiro;
+use show::mensagem::mensagem_manager::{ManagerRequest, MensagemManager};
+use show::mensagem::sistema_handle::SistemaHandle;
 
 #[tokio::main]
 async fn main() {
@@ -13,7 +13,9 @@ async fn main() {
     let mut manager = MensagemManager::new(rx);
 
     tokio::spawn(async move {
-        manager.start().await.unwrap();
+        if let Err(err) = manager.start().await {
+            eprintln!("erro no manager: {err}");
+        }
     });
 
     register_default_mensageiro(tx.clone()).await;
@@ -33,11 +35,18 @@ async fn register_default_mensageiro(tx: tokio::sync::mpsc::Sender<ManagerReques
 
     let (resp_tx, mut resp_rx) = mpsc::channel(1);
 
-    tx.send(ManagerRequest::AdicionarMensageiro {
-        id: 1,
-        mensageiro: Box::new(Mensageiro {}),
-        resposta: resp_tx,
-    }).await.unwrap();
+    if tx
+        .send(ManagerRequest::AdicionarMensageiro {
+            id: 1,
+            mensageiro: Box::new(Mensageiro {}),
+            resposta: resp_tx,
+        })
+        .await
+        .is_err()
+    {
+        eprintln!("falha ao registrar mensageiro padrao");
+        return;
+    }
 
     let _ = resp_rx.recv().await;
 }
